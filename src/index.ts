@@ -26,29 +26,8 @@ const withErrors = (command: (...args: any[]) => Promise<void>) => {
   };
 };
 
-// const options: HttpLink.Options = {
-//   uri: uri,
-//   fetch: fetch,
-//   headers: staticHeaders,
-// };
-//
-// const httpLink = new HttpLink(options);
-
 
 const options = (program as any) as ProgramOptions;
 const loader = new SchemaLoader({global: options});
 const actions = new Actions(options, loader);
 actions.processGraphQLConfig();
-
-// program
-//   .version('0.1.0')
-//   .option('-d --debug', 'Debug logging')
-//   .option('-p --aws-profile <profile>', 'Use given aws profile')
-//   .option('-r --aws-region <region>', 'Use given aws region');
-//
-//
-// try {
-//   program.parse(process.argv);
-// } catch (err) {
-//   console.error('Fatal error: ' + err.stack);
-// }
