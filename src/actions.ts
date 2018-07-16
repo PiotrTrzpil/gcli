@@ -1,61 +1,35 @@
 import 'source-map-support/register'
 
-import { DocumentNode, FieldNode, GraphQLNamedType, GraphQLSchema, GraphQLType, isObjectType, isOutputType, OperationDefinitionNode, printSchema, SelectionNode, SelectionSetNode, validate } from "graphql";
+import { DocumentNode, FieldNode, GraphQLNamedType, GraphQLScalarType, GraphQLSchema, GraphQLType, isObjectType, isOutputType, OperationDefinitionNode, printSchema, SelectionNode, SelectionSetNode, validate } from "graphql";
 import {
   getGraphQLConfig,
   resolveEnvsInValues,
 } from "graphql-config";
 import Printer from "./printer";
-import { GraphQLField, GraphQLNonNull, GraphQLObjectType, GraphQLOutputType } from "graphql/type/definition";
+import { GraphQLEnumType, GraphQLField, GraphQLInterfaceType, GraphQLList, GraphQLNonNull, GraphQLObjectType, GraphQLOutputType, GraphQLUnionType } from "graphql/type/definition";
 import * as util from "util";
 import SchemaLoader from "./SchemaLoader";
-
-const withErrors = (command: (...args: any[]) => Promise<void>) => {
-  return async (...args: any[]) => {
-    try {
-      await command(...args);
-    } catch (e) {
-
-      if (e.stack) {
-        console.error(e.stack);
-      } else if (e.message) {
-        console.error("Error: " + e.message);
-      } else {
-        console.error("Error: " + e);
-      }
-
-      process.exitCode = 1;
-    }
-  };
-};
-
+import * as _ from "lodash";
 
 const binName = 'gcli';
-
-const requireSingleValue = (params: string[]) => {
-  return params[0];
-  // if (typeof (params) === 'array') {
-  //   return params[0];
-  // } else if (typeof (params) === 'string') {
-  //   return params;
-  // } else {
-  //   throw new Error('Invalid param type: ' + typeof (params))
-  // }
-};
-
 
 export default class Actions {
   private global: ProgramOptions;
   private schemaLoader: SchemaLoader;
   private schema?: GraphQLSchema;
-  private didRun = false;
+  private outputJson = false;
 
   constructor(global: ProgramOptions, schemaLoader: SchemaLoader) {
     this.global = global;
     this.schemaLoader = schemaLoader;
   }
 
-  buildSelectionSet(fieldPath: string[], leafType: GraphQLNamedType): SelectionSetNode | undefined {
+  configureOuput(argv: any) {
+    this.outputJson = argv.argv.json
+  }
+
+  buildSelectionSet(fieldPath: string[], leafType: GraphQLNamedType, args: any): SelectionSetNode | undefined {
+    Printer.debug('fieldPath', fieldPath);
     if (fieldPath.length === 0) {
       if (isObjectType(leafType)) {
         return this.selectionSetForType(leafType);
@@ -63,7 +37,7 @@ export default class Actions {
         return undefined;
       }
     } else {
-      return this.selectionWithSingleField(fieldPath[0], this.buildSelectionSet(fieldPath.slice(1), leafType));
+      return this.selectionWithSingleField(fieldPath[0], args[fieldPath[0]] || [], this.buildSelectionSet(fieldPath.slice(1), leafType, args));
     }
   }
 
@@ -71,16 +45,27 @@ export default class Actions {
     if (fieldPath.length === 0) {
       return data;
     } else {
-      return this.getInnermostData(fieldPath.slice(1), data[fieldPath[0]]);
+
+      if (util.isArray(data)) {
+        return data.map(elem => {
+          return this.getInnermostData(fieldPath, elem);
+        })
+      } else {
+        const newData = data[fieldPath[0]];
+        if (!newData) {
+          throw new Error('Cannot find ' + fieldPath[0] + ' in: ' + Printer.inspect(data))
+        }
+        return this.getInnermostData(fieldPath.slice(1), newData);
+      }
     }
   }
 
-  async runQuery(fieldPath: string[], type: GraphQLNamedType) {
+  async runQuery(fieldPath: string[], type: GraphQLNamedType, args: any) {
 
     const operation: OperationDefinitionNode = {
       kind: "OperationDefinition",
       operation: 'query',
-      selectionSet: this.buildSelectionSet(fieldPath, type) as SelectionSetNode
+      selectionSet: this.buildSelectionSet(fieldPath, type, args) as SelectionSetNode
     };
 
 
@@ -89,78 +74,207 @@ export default class Actions {
       definitions: [operation]
     };
 
+    // Printer.debug('validating document:', doc)
     const errors = validate(this.schema as GraphQLSchema, doc);
     if (errors.length > 0) {
-      throw errors;
+      Printer.debug('Got validation erorrs', errors);
+      if (errors.length === 1) {
+        // throw errors[0]
+        console.error(errors[0].message);
+      } else {
+        for (const error of errors) {
+          console.error(error.message);
+        }
+        // throw new Error('Got multiple validation errors: ' + Printer.inspect(errors))
+      }
+    } else {
+      try {
+        const result = await this.schemaLoader.doQuery(doc as any);
+
+        if (result.data) {
+          // console.dir(result.data)
+          let transformed = this.getInnermostData(fieldPath, result.data);
+          // _.cloneDeep(transformed)
+
+          if (typeof transformed === 'object' && !util.isArray(transformed)) {
+            const validKeys = Object.keys(transformed)
+              .filter(key => !key.startsWith('['))
+              .filter(key => key !== '__typename');
+
+            const newObj: any = {};
+            validKeys.forEach(key => newObj[key] = transformed[key]);
+            transformed = newObj;
+          }
+
+          if (this.outputJson) {
+            console.log(JSON.stringify(transformed));
+          } else {
+            console.log(util.inspect(transformed, {colors: true}));
+          }
+        }
+
+        if (result.errors) {
+          if (result.errors.length === 1) {
+            console.error(result.errors[0].message)
+          }
+          Printer.debug('Errors:', result.errors);
+        }
+      } catch (e) {
+        if (e.graphQLErrors) {
+          Printer.debug(e);
+          console.error(e.message);
+        }
+      }
     }
 
 
-    const result = await this.schemaLoader.doQuery(doc as any);
-
-    if (result.data) {
-      // console.dir(result.data)
-      const transformed = this.getInnermostData(fieldPath, result.data);
-      console.log(transformed)
-      // const transformed = JSON.parse(JSON.stringify(result.data[initialQuery]));
-      // delete transformed["__typename"];
-      // // delete result.data[initialQuery]['[Symbol(id)]'];
-      // const printed = util.inspect(transformed, {
-      //   showHidden: false,
-      //   depth: null,
-      //   colors: true
-      // });
-      // console.log(printed);
-
-    }
-
-    if (result.errors) {
-      Printer.debug('Errors:', result.errors);
-    }
   }
 
+  setArguments(sywacInner: any, args: any[]) {
+    Printer.debug('Setting arguments', args.map(arg => arg.name));
+    args.forEach(arg => {
+      sywacInner.string(`--${arg.name}`, {
+        desc: arg.description || '',
+        group: 'Arguments:',
+      })
+      // flags: `--${arg.name}`,
+      // required: false,
+      // desc: arg.description || '',
+      // // type: 'number',
+      // hint: ''
+    });
+    // sywacInner.boolean('-u, --untracked', { desc: 'Include untracked changes' })
+  }
 
-
-  interpretField(sywac: any, prevField: string, aField: GraphQLField<any, any>) {
+  interpretField(sywac: any, selectionPath: string[], selectionArgs: any[], currentType: GraphQLObjectType, aField: GraphQLField<any, any>) {
     const fieldName = aField.name;
+    const type: GraphQLOutputType = aField.type;
     const fieldType = aField.type as GraphQLNamedType;
     const fieldTypeNonNull = aField.type as GraphQLNonNull<any>;
-    // console.log('field: ' + key + ", "  + fields[key].description)
-    // console.dir(fields[key])
+    let fieldTypeNamed;
+    if (fieldTypeNonNull && fieldTypeNonNull.ofType && fieldTypeNonNull.ofType.name) {
+      fieldTypeNamed = fieldTypeNonNull.ofType;
+    }
+
+    let usage = `Usage: ${binName} ${selectionPath.join(' ')} <field> ...`;
+    const commandPart ='';
+    if (currentType.name && currentType.name.match(/.+Connection$/)) {
+      // commandPart = ' --first'
+      usage = `Usage: ${binName} ${selectionPath.join(' ')} --first 10`;
+    }
+    const params = undefined;
+    // if (aField.args && aField.args.length > 0) { //   fieldTypeNamed && fieldTypeNamed.name.match(/.+Connection$/)) { // fieldName === 'repositories') {
+    //   params = aField.args.map(arg => ({
+    //     flags: `--${arg.name}`,
+    //     required: false,
+    //     desc: arg.description || '',
+    //     // type: 'number',
+    //     hint: ''
+    //   }))
+    // }
+    const newSelectionPath = selectionPath.concat([fieldName]);
     sywac
-      .usage(`Usage: ${binName} ${prevField} <field> ...`)
-      .command(fieldName, {
-        // ignore: [key],
+      .usage(usage)
+      .command(`${fieldName}${commandPart}`, {
+        ignore: ['wat'],
+        group: 'Fields:',
+        params: params,
+        // paramsDescription: 'dadaddaada',
+        // params: [{
+        //   flags: '--what [what=10]',
+        //   desc: 'What would you like on your sandwich?'
+        // }],
+        hints: '',
+        // paramsGroup: 'Bla',
         desc: aField.description,
         setup: (sywacInner: any) => {
           Printer.debug('Setting up subcommand', fieldName);
-          if (fieldTypeNonNull.ofType && fieldTypeNonNull.ofType.getFields) {
-            this.genSubcommands(sywacInner, prevField + ' ' + fieldName, fieldTypeNonNull.ofType )
-          } else {
-            sywacInner
-              .usage(`Use this command to access this field (${Printer.inspect(fieldType)}): ${binName} ${prevField + ' ' + fieldName} ` )
+
+          const shouldSetArguments = aField.args && aField.args.length > 0;
+          if (aField.args && aField.args.length > 0) {
+            this.setArguments(sywacInner, aField.args);
           }
+          Printer.debug('fieldType', fieldType)
+          Printer.debug('fieldTypeNonNull.ofType', fieldTypeNonNull.ofType)
+
+          if (type instanceof GraphQLNonNull) {
+            Printer.debug('GraphQLNonNull', type)
+            if ((type.ofType as any).getFields) {
+              this.genSubcommands(sywacInner, newSelectionPath, selectionArgs, type.ofType as any )
+            } else {
+              Printer.debug('no ofType', type)
+            }
+          } else if (type instanceof GraphQLScalarType) {
+            Printer.debug('GraphQLScalarType', type)
+          } else if (type instanceof GraphQLObjectType) {
+            Printer.debug('GraphQLObjectType', type)
+            this.genSubcommands(sywacInner, newSelectionPath, selectionArgs, type as any )
+          } else if (type instanceof GraphQLList && (type.ofType as any).getFields) {
+            Printer.debug('GraphQLList', type)
+            this.genSubcommands(sywacInner, newSelectionPath, selectionArgs, type.ofType as any )
+          } else {
+            Printer.debug('UNKNOWN', type)
+            sywacInner
+              .usage(`Use this command to access this field (${Printer.inspect(fieldType)}): ${binName} ${newSelectionPath.join(' ')} ` )
+          }
+          //
+          // if (fieldTypeNonNull.ofType && fieldTypeNonNull.ofType.getFields) {
+          //   this.genSubcommands(sywacInner, newSelectionPath, selectionArgs, fieldTypeNonNull.ofType )
+          // } else {
+          //   sywacInner
+          //     .usage(`Use this command to access this field (${Printer.inspect(fieldType)}): ${binName} ${newSelectionPath.join(' ')} ` )
+          // }
 
         },
         run: async (arg1: any, context: any) => {
-          Printer.debug('Running ' + fieldName);
-          await this.runQuery(context.details.args, fieldType)
+          const fixedSelectionPath = newSelectionPath.slice(1);
+          Printer.debug('Running command:', fixedSelectionPath);
+          // Printer.debug(context);
+
+          const args = this.resolveArgs(context, fixedSelectionPath);
+
+          Printer.debug('Got args:', args);
+          await this.runQuery(fixedSelectionPath, fieldType, args)
         }
       })
   }
 
-  genSubcommands(sywac: any, field: string, type: GraphQLObjectType) {
+  resolveArgs(context: any, selectionPath: string[]) {
+
+    const flags = context.details.types.filter((type: any) => type.source === 'flag');
+    Printer.debug(flags);
+    const args: any = {};
+    for (const index in selectionPath) {
+      const pathPart = selectionPath[index];
+      const foundTypes = flags.filter((type: any) => type.parent && type.parent.endsWith(' ' + pathPart));
+      if (foundTypes.length > 0) {
+        args[pathPart] = foundTypes.map((type: any) => ({
+          name: type.aliases[0],
+          type: type.datatype,
+          value: type.value,
+        }))
+      }
+    }
+    return args;
+  }
+
+  genSubcommands(sywac: any, selectionPath: string[], selectionArgs: any[], type: GraphQLObjectType) {
 
     if (!type) {
       return;
     }
+
     const fields = type.getFields();
     for (const key in fields) {
       const aField = fields[key] as GraphQLField<any, any>;
-      this.interpretField(sywac, field, aField)
+      this.interpretField(sywac, selectionPath, selectionArgs, type, aField)
     }
   }
 
+
   async interpretCommands(argv: any) {
+
+    this.configureOuput(argv);
 
     if (argv.argv.default) {
       const apiName = argv.argv.default;
@@ -171,7 +285,7 @@ export default class Actions {
         .help('-h, --help')
         .usage(`Usage: ${binName} ${apiName} <field> ...`)
 
-      this.genSubcommands(sywacother, apiName, this.schema.getQueryType() as any);
+      this.genSubcommands(sywacother, [apiName], [], this.schema.getQueryType() as any);
 
       const parsed = await sywacother.parse();
 
@@ -203,6 +317,7 @@ export default class Actions {
     }
     const argv = await sywac
       .boolean('-d, --debug', { desc: 'Enable debug logging' })
+      .boolean('--json', { desc: 'Enable json output' })
       .outputSettings({ maxWidth: 175 })
       .parse();
 
@@ -217,7 +332,7 @@ export default class Actions {
       process.env.DEBUG_COLORS = 'true';
     }
 
-    const newArgs = argv.details.args.filter((arg: string) => arg !== '--debug');
+    const newArgs = argv.details.args.filter((arg: string) => arg !== '--debug' && arg !== '--json');
 
     process.argv = process.argv.slice(0, 2).concat(newArgs.slice(1));
 
@@ -226,17 +341,27 @@ export default class Actions {
 
   }
 
-  selectionWithSingleField(fieldName: string, innerSelection?: SelectionSetNode): SelectionSetNode {
+  selectionWithSingleField(fieldName: string, args: any[], innerSelection?: SelectionSetNode): SelectionSetNode {
     const node: FieldNode = {
       kind: "Field",
       name: {
         kind: "Name",
         value: fieldName
       },
-      arguments: [],
+      arguments: args.map((arg: any) => ({
+        kind: 'Argument',
+        name: {
+          kind: 'Name',
+          value: arg.name,
+        },
+        value: {
+          kind: 'IntValue',
+          value: arg.value,
+        }
+      })),
       // directives?: DirectiveNode[];
       selectionSet: innerSelection,
-    };
+    } as any;
     return {
       kind: 'SelectionSet',
       selections: [node]
@@ -249,7 +374,7 @@ export default class Actions {
     // let selectionSet = "{";
     if (isObjectType(type)) {
       const outputType = type as GraphQLObjectType;
-      console.log("value: " + Printer.inspect(outputType));
+      Printer.debug("value: ", outputType);
       for (const fieldName in outputType.getFields()) {
 
         const node: FieldNode = {
@@ -277,76 +402,6 @@ export default class Actions {
     }
 
   }
-
-  public genSchema = (name: string) => async (initialQuery: string, otherDirs: any, options: GenSchemaOptions) => {
-    this.didRun = true;
-    if (this.global.debug) {
-      console.log("query: " + initialQuery);
-      console.log("otherDirs: " + Printer.json(otherDirs));
-      // console.log('profile: ' + this.global.awsProfile);
-      // console.log('region: ' + this.global.awsRegion);
-    }
-
-    let query = initialQuery;
-
-    const schema = await this.schemaLoader.load(name);
-
-
-    console.log(printSchema(schema));
-
-    const queryType = schema.getQueryType();
-    if (queryType) {
-
-      for (const key in queryType.getFields()) {
-        const value: GraphQLField<any, any> = queryType.getFields()[key];
-        console.log("key: " + key);
-
-
-        let selectionSet = "{";
-        if (isObjectType(value.type)) {
-          const outputType = value.type as GraphQLObjectType;
-          console.log("value: " + Printer.inspect(outputType));
-          for (const fieldName in outputType.getFields()) {
-            selectionSet = selectionSet + fieldName + ",";
-          }
-
-          selectionSet = selectionSet.substr(0, selectionSet.length - 1) + "}";
-        }
-
-
-        if (key === query) {
-          if (value.args && value.args.length === 1) {
-            const p = requireSingleValue(otherDirs);
-
-            query = query + "(" + value.args[0].name + ":" + JSON.stringify(p) + ") " + selectionSet;
-          }
-        }
-      }
-    } else {
-      throw new Error('No query type in schema.')
-    }
-
-
-    const result = await this.schemaLoader.doQuery(query);
-
-    if (result.data) {
-      const transformed = JSON.parse(JSON.stringify(result.data[initialQuery]));
-      delete transformed["__typename"];
-      // delete result.data[initialQuery]['[Symbol(id)]'];
-      const printed = util.inspect(transformed, {
-        showHidden: false,
-        depth: null,
-        colors: true
-      });
-      console.log(printed);
-
-    }
-
-    if (result.errors) {
-      console.error("Errors: " + Printer.inspect(result.errors, true));
-    }
-  };
-
 }
 
 export interface ProgramOptions {

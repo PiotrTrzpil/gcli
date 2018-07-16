@@ -4,8 +4,7 @@ import * as program from 'commander';
 import Actions, { ProgramOptions } from './actions';
 import SchemaLoader from "./SchemaLoader";
 import { HttpLink } from "apollo-link-http";
-
-process.env.AWS_SDK_LOAD_CONFIG = 'true';
+import Printer from "./printer";
 
 const withErrors = (command: (...args: any[]) => Promise<void>) => {
   return async (...args: any[]) => {
@@ -30,4 +29,16 @@ const withErrors = (command: (...args: any[]) => Promise<void>) => {
 const options = (program as any) as ProgramOptions;
 const loader = new SchemaLoader({global: options});
 const actions = new Actions(options, loader);
-actions.processGraphQLConfig();
+
+
+async function run() {
+  try {
+    await actions.processGraphQLConfig();
+  } catch (error) {
+    Printer.debug('Error on top level', error);
+    console.error(error.message)
+  }
+}
+
+
+const _ = run();
