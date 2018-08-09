@@ -1,0 +1,34 @@
+projects:
+  default:
+    default: true
+    schemaPath: schema.graphql
+    extensions:
+      endpoints:
+        default:
+          url: https://..................appsync-api.eu-west-1.amazonaws.com/graphql
+          headers: 
+            "x-api-key": "........................"
+  api:
+    schemaPath: schema.graphql
+    extensions:
+      endpoints:
+        default:
+          url: https://tray.io/graphql
+          headers:
+            "Authorization": "bearer ................."
+  github:
+    schemaPath: schema.graphql
+    extensions:
+      endpoints:
+        default:
+          url: https://api.github.com/graphql
+          headers:
+            "Authorization": "bearer ............................."
+
+  onegraph:
+    schemaPath: schema.graphql
+    extensions:
+      endpoints:
+        default:
+          url: https://serve.onegraph.com/dynamic?app_id=.............................
+
