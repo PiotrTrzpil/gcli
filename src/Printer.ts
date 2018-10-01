@@ -13,18 +13,17 @@ export default class Printer {
     if (process.env.DEBUG_ENABLED) {
       let combined = '';
       for (const arg in args) {
-        // console.dir(args[arg])
         if (typeof args[arg] === 'string') {
           combined = combined + args[arg] + ' '
         } else {
-          combined = combined + Printer.inspect(args[arg], process.env.DEBUG_COLORS === 'true') + ' '
+          combined = combined + Printer.insp(args[arg], process.env.DEBUG_COLORS === 'true') + ' '
         }
       }
       console.log(combined)
     }
   }
 
-  public static inspect(obj: any, colors: boolean = true) {
+  public static insp(obj: any, colors: boolean = true) {
     return util.inspect(obj, {
       showHidden: true,
       depth: null,
@@ -47,7 +46,6 @@ export default class Printer {
     return {
       name: obj.name,
       path: obj.path,
-      locations: obj.locations,
       stack: stack,
     };
   }
