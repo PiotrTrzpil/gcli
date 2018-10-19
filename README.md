@@ -1,6 +1,6 @@
 # gcli
 
-CLI to any GraphQL server
+Have a CLI to all GraphQL servers!
 
 ## Setup
 
