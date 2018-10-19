@@ -14,6 +14,8 @@ This will create .graphqlconfig.yaml file that then will be used by gcli. The pr
 gcli github viewer url
 ```
 
+Help shows fields of a type on the given selection set:
+
 ```
 ➜ ✗ gcli github --help
 Usage: gcli github <field> ...
@@ -31,4 +33,11 @@ Fields:
   marketplaceListing     Look up a single Marketplace listing
   marketplaceListings    Look up Marketplace listings
   meta                   Return information about the GitHub instance
+```
+
+You can use scalar parameters and query sub-fields:
+
+```
+➜ ✗ gcli github viewer repository --name gcli description
+'Command line interface for any GraphQL server'
 ```
