@@ -2,6 +2,8 @@
 
 Have a CLI to all GraphQL servers!
 
+gCLI transforms a GraphQL schema into a CLI, allowing you to query, run mutations (in the future) and see relevant fields you can query via generated help.
+
 ## Setup
 
 1. Install https://github.com/graphql-cli/graphql-cli
