@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-
+import 'source-map-support/register'
 import * as program from 'commander';
 import Actions, { ProgramOptions } from './Actions';
 import SchemaLoader from "./SchemaLoader";
@@ -13,7 +13,7 @@ async function run() {
     const loader = new SchemaLoader({global: options});
     const actions = new Actions(options, new ProjectLoader(), loader);
 
-    const output = await actions.processGraphQLConfig();
+    const output = await actions.runOn(process.argv);
 
     console.log(output)
   } catch (error) {

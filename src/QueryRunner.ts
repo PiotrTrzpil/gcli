@@ -6,9 +6,10 @@ import {
   GraphQLSchema,
   OperationDefinitionNode,
   SelectionSetNode,
+  print,
   validate,
 } from 'graphql';
-import { SelectionSets } from './SelectionSets';
+import { Arg, SelectionSets } from './SelectionSets';
 import SchemaLoader from './SchemaLoader';
 import { ApolloQueryResult } from 'apollo-client';
 
@@ -16,7 +17,6 @@ export interface QueryResult {
   validationErrors?: ReadonlyArray<GraphQLError>
   raw?: ApolloQueryResult<any>
   outputObj: any
-  // output: string
 }
 
 export class QueryRunner {
@@ -53,7 +53,7 @@ export class QueryRunner {
     }
   }
 
-  async runQuery(outputJson: boolean, fieldPath: string[], type: GraphQLNamedType, args: any): Promise<QueryResult> {
+  async runQuery(outputJson: boolean, fieldPath: string[], type: GraphQLNamedType, args: Record<string, Arg[]>): Promise<QueryResult> {
 
     const operation: OperationDefinitionNode = {
       kind: 'OperationDefinition',
@@ -65,11 +65,11 @@ export class QueryRunner {
       kind: 'Document',
       definitions: [operation],
     };
-
-    // Printer.debug('validating document:', doc)
+    Printer.debug(print(doc as any));
+    // process.exit(1)
     const errors = validate(this.schema as GraphQLSchema, doc);
     if (errors.length > 0) {
-      Printer.debug('Got validation erorrs', errors);
+      Printer.debug('Got validation errors', errors.slice(0, 4));
       return {
         validationErrors: errors,
         outputObj: errors.map(err => err.message),
@@ -79,9 +79,7 @@ export class QueryRunner {
         const result = await this.schemaLoader.doQuery(doc as any);
         Printer.debug('RAW RES:', result)
         if (result.data) {
-          // console.dir(result.data)
           let transformed = this.getInnermostData(fieldPath, result.data);
-          // _.cloneDeep(transformed)
 
           if (typeof transformed === 'object' && !util.isArray(transformed)) {
             const validKeys = Object.keys(transformed)

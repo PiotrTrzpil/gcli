@@ -5,4 +5,5 @@ DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 
 PATH=$(npm bin):$PATH
 
-ts-node $DIR/src/index.ts "$@"
+#ts-node $DIR/src/index.ts "$@"
+tsc && node $DIR/lib/index.js "$@"

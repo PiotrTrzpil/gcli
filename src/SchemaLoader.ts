@@ -20,6 +20,7 @@ export default class SchemaLoader {
   }
 
   public async load(name: string): Promise<GraphQLSchema> {
+    Printer.debug('project name: ' + name)
     const config = getGraphQLConfig(process.cwd());
     config.config = resolveEnvsInValues(config.config, process.env);
 
@@ -69,7 +70,7 @@ export default class SchemaLoader {
     Printer.debug('Sending query: ', query);
 
     return client.query({
-      query: query as any, // gql`query { ${query} }`
+      query: query,
     });
   }
 }

@@ -42,6 +42,31 @@ process.env.DEBUG_COLORS = 'true';
 
   }
 
+  @test async 'show usage by default'() {
+    const actions = new Actions({}, new TestProjectLoader(), new TestSchemaLoader());
+    const output = await actions.runOn(['program-name']);
+
+    this.logOutput(output);
+    expect(output.trim()).to.contain(`Usage: _mocha [options]\n\nOptions:`.trim())
+  }
+
+  @test async 'show top level api usage'() {
+    const actions = new Actions({}, new TestProjectLoader(), new TestSchemaLoader());
+    const output = await actions.runOn(['program-name', '--debug', 'proj1' , '--help']);
+
+    this.logOutput(output);
+    expect(output.trim()).to.eq(`
+Usage: gcli  <field> ...
+
+Options:
+  -h, --help  Show help                                                                                                                              [commands: help] [boolean]
+
+Fields:
+  nested
+
+`.trim())
+  }
+
 //   @test async 'show help'() {
 //     process.argv = ['', '--debug', '--default', 'proj1', '--help'];
 //
@@ -49,7 +74,7 @@ process.env.DEBUG_COLORS = 'true';
 //     };
 //
 //     const actions = new Actions(options, new TestProjectLoader(), new TestSchemaLoader());
-//     const output = await actions.processGraphQLConfig();
+//     const output = await actions.runOn();
 //
 //     this.logOutput(output);
 //     expect(output.trim()).to.eq(`
@@ -62,13 +87,8 @@ process.env.DEBUG_COLORS = 'true';
 //   }
 
   @test async 'show field usage'() {
-    process.argv = ['', '--debug', 'proj1', 'nested', 'field'];
-
-    const options = {
-    };
-
-    const actions = new Actions(options, new TestProjectLoader(), new TestSchemaLoader());
-    const output = await actions.processGraphQLConfig();
+    const actions = new Actions({}, new TestProjectLoader(), new TestSchemaLoader());
+    const output = await actions.runOn(['', '--debug', 'proj1', 'nested', 'field']);
 
     this.logOutput(output);
     expect(output.trim()).to.eq(`'Hello World'`.trim())

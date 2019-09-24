@@ -14,6 +14,8 @@ import SchemaLoader from './SchemaLoader';
 import { QueryResult, QueryRunner } from './QueryRunner';
 import { ProjectLoader } from './ProjectLoader';
 import * as util from 'util';
+import * as _ from 'lodash';
+import { Arg } from './SelectionSets';
 
 const binName = 'gcli';
 
@@ -51,11 +53,11 @@ export class CommandRunner {
   }
 
 
-  resolveArgs(context: any, selectionPath: string[]) {
+  resolveArgs(context: any, selectionPath: string[]): Record<string, Arg[]> {
 
     const flags = context.details.types.filter((type: any) => type.source === 'flag');
     Printer.debug(flags);
-    const args: any = {};
+    const args: Record<string, Arg[]> = {};
     for (const index in selectionPath) {
       const pathPart = selectionPath[index];
       const foundTypes = flags.filter((type: any) => type.parent && type.parent.endsWith(' ' + pathPart));
@@ -64,7 +66,7 @@ export class CommandRunner {
           name: type.aliases[0],
           type: type.datatype,
           value: type.value,
-        }));
+        } as Arg));
       }
     }
     return args;
@@ -215,9 +217,6 @@ export default class Actions {
 
 
   genSubcommands(sywac: any, selectionPath: string[], selectionArgs: any[], type: GraphQLObjectType, accumulator: ResultAccumulator): void {
-
-    // co
-
     if (type) {
       const fields = type.getFields();
       for (const key in fields) {
@@ -226,18 +225,24 @@ export default class Actions {
         this.interpretField(sywac, selectionPath, selectionArgs, type, aField, accumulator);
       }
     }
-    // return acc;
   }
 
 
-  async interpretCommands(argv: any): Promise<string> {
+  async interpretCommands(slicedArgs: string[], argv: any): Promise<string> {
 
     this.configureOuput(argv);
 
-    // if (argv.argv.default) {
-    const apiName = argv.argv.default;
+    Printer.debug(argv);
+    const apiName = argv.argv._[0];  // default;
+
+    slicedArgs = slicedArgs.slice(1);
+
+    if (!_.isString(apiName)) {
+      throw new Error('Invalid api name: ' + apiName)
+    }
+
     this.queryRunner = new QueryRunner(this.schemaLoader);
-    const schema = await this.queryRunner.loadSchema(argv.argv.default);
+    const schema = await this.queryRunner.loadSchema(apiName);
     Printer.debug('loaded schema:\n', printSchema(schema))
     const sywacother = require('sywac/api').get()
       .outputSettings({ maxWidth: 175 })
@@ -254,7 +259,7 @@ export default class Actions {
 
     this.genSubcommands(sywacother, [apiName], [], schema.getQueryType() as any, accumulator);
 
-    const parsed = await sywacother.parse();
+    const parsed = await sywacother.parse(slicedArgs);
 
     Printer.debug('RESULT:', parsed)
 
@@ -266,7 +271,7 @@ export default class Actions {
         .map(holder => holder.runner)) as any as CommandRunner[];
 
       if (runners.length === 0) {
-        throw new Error('dont know what to do')
+        throw new Error('no runners - dont know what to do')
       } else {
         const result = await runners[0].run(this.queryRunner);
         if (result.validationErrors) {
@@ -295,24 +300,36 @@ export default class Actions {
 
   }
 
-  public async processGraphQLConfig(): Promise<string> {
+  public async runOn(args: string[] | undefined): Promise<string> {
     let sywac = require('sywac/api').get();
 
     for (const key in this.projLoader.getProjectNames()) {
       sywac = sywac
-        .positional(key, { paramsDesc: 'A required string argument' });
+        .command(key, {
+          run: async (arg1: any, context: any) => {
+            Printer.debug("RUN:", arg1)
+          }
+        });
+
+        // .positional(key, { paramsDesc: 'A required string argument' });
     }
+
+    const resolvedArgs = args || process.argv;
     const argv = await sywac
+      .showHelpByDefault()
       .boolean('-d, --debug', { desc: 'Enable debug logging' })
       .boolean('--json', { desc: 'Enable json output' })
       .outputSettings({ maxWidth: 175 })
-      .parse();
+      .parse(resolvedArgs.slice(2));
 
+    if (argv.output !== '') {
+      return argv.output;
+    }
     // console.log('Top-level output: ')
     // console.log(util.inspect(argv, true, 999))
     // console.log(argv.output)
 
-    // console.dir(argv);
+    // console.dir(argv.details.types);
 
     if (argv.argv.debug) {
       process.env.DEBUG_ENABLED = 'true';
@@ -320,10 +337,10 @@ export default class Actions {
     }
 
     const newArgs = argv.details.args.filter((arg: string) => arg !== '--debug' && arg !== '--json');
-
-    process.argv = process.argv.slice(0, 2).concat(newArgs.slice(1));
-    Printer.debug('Changed args to:', process.argv)
-    return this.interpretCommands(argv);
+    // Printer.debug('newArgs:', newArgs);
+    // const slicedArgs = resolvedArgs.slice(0, 2).concat(newArgs.slice(1)).slice(2);
+    Printer.debug('Changed args to:', newArgs);
+    return this.interpretCommands(newArgs, argv);
   }
 
 }
