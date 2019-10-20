@@ -1,11 +1,11 @@
 import 'reflect-metadata';
 import 'source-map-support/register';
-import SchemaLoader from '../../src/SchemaLoader';
+import SchemaConnection from '../../src/SchemaConnection';
 import { DocumentNode, ExecutionResult, graphql, GraphQLSchema, print } from 'graphql';
 import * as fs from 'fs';
 import { addMockFunctionsToSchema, makeExecutableSchema } from 'graphql-tools';
 
-export class TestSchemaLoader extends SchemaLoader {
+export class TestSchemaConnection extends SchemaConnection {
   private schema!: GraphQLSchema;
   private schemaFiles: Map<string, string>;
 
@@ -35,12 +35,10 @@ export class TestSchemaLoader extends SchemaLoader {
         }),
       }
     });
-
     return Promise.resolve(schema);
   }
 
   async doQuery(query: DocumentNode): Promise<ExecutionResult> {
     return graphql(this.schema, print(query));
   }
-
 }

@@ -7,7 +7,7 @@ import 'chai/register-expect';
 import * as fs from 'fs';
 import { addMockFunctionsToSchema, makeExecutableSchema } from 'graphql-tools';
 import Actions from '../src/Actions';
-import { TestSchemaLoader } from './framework/TestSchemaLoader';
+import { TestSchemaConnection } from './framework/TestSchemaConnection';
 import { TestProjectLoader } from './framework/TestProjectLoader';
 import { Main } from '../src/Main';
 import { ApiLoader } from '../src/ApiLoader';

@@ -27,7 +27,7 @@
     "prepublishOnly": "npm run build",
     "prebuild": "npm run clean && npm run format && npm run lint && echo Using TypeScript && tsc --version",
     "compile": "tsc --pretty",
-    "test": "mocha --full-trace",
+    "test": "mocha",
     "watch": "tsc --watch",
     "codegen": "source github.env && graphql-codegen --config codegen.yml",
     "watch:test": "npm run pretest && mocha-typescript-watch lib/**/*.spec.js --timeout 5000"

@@ -1,239 +1,41 @@
 import 'reflect-metadata';
 import 'source-map-support/register';
-import { GraphQLNamedType, GraphQLScalarType, printSchema } from 'graphql';
-import { getGraphQLConfig, resolveEnvsInValues } from 'graphql-config';
 import Printer from './utils/Printer';
-import {
-  GraphQLField,
-  GraphQLList,
-  GraphQLNonNull,
-  GraphQLObjectType,
-  GraphQLOutputType,
-} from 'graphql/type/definition';
-import SchemaLoader from './SchemaLoader';
-import { QueryResult, QueryRunner } from './QueryRunner';
+import SchemaConnection from './SchemaConnection';
+import { QueryRunner } from './QueryRunner';
 import { ApiLoader } from './ApiLoader';
-import * as util from 'util';
 import * as _ from 'lodash';
-import { Arg } from './SelectionSets';
+import { FieldInterpreter } from './FieldInterpreter';
 
-const binName = 'gcli';
-
-
-export interface ResultAccumulator {
-  results: CommandRunnerHolder[]
-}
-
-export class CommandRunnerHolder {
-  runner?: CommandRunner
-}
-export class CommandRunner {
-  private selectionPath: string[];
-  private fieldType: GraphQLNamedType;
-  private context: any;
-
-  constructor(context: any,
-              fieldType: GraphQLNamedType,
-              selectionPath: string[]) {
-    this.selectionPath = selectionPath;
-    this.context = context;
-    this.fieldType = fieldType;
-  }
-
-
-  async run(queryRunner: QueryRunner) {
-    const fixedSelectionPath = this.selectionPath; // newSelectionPath.slice(1);
-    Printer.debug('Running command:', fixedSelectionPath);
-    // Printer.debug(context);
-
-    const args = this.resolveArgs(this.context, fixedSelectionPath);
-
-    Printer.debug('Got args:', args);
-    return queryRunner.runQuery(true, fixedSelectionPath, this.fieldType, args);
-  }
-
-
-  resolveArgs(context: any, selectionPath: string[]): Record<string, Arg[]> {
-
-    const flags = context.details.types.filter((type: any) => type.source === 'flag');
-    Printer.debug(flags);
-    const args: Record<string, Arg[]> = {};
-    for (const index in selectionPath) {
-      const pathPart = selectionPath[index];
-      const foundTypes = flags.filter((type: any) => type.parent && type.parent.endsWith(' ' + pathPart));
-      if (foundTypes.length > 0) {
-        args[pathPart] = foundTypes.map((type: any) => ({
-          name: type.aliases[0],
-          type: type.datatype,
-          value: type.value,
-        } as Arg));
-      }
-    }
-    return args;
-  }
-}
 
 export default class Actions {
   private global: ProgramOptions;
-  private readonly schemaLoader: SchemaLoader;
+  private readonly schemaLoader: SchemaConnection;
   private outputJson = false;
   private queryRunner!: QueryRunner;
   private projLoader: ApiLoader;
+  public binName: string;
 
   constructor(global: ProgramOptions,
               projLoader: ApiLoader,
-              schemaLoader: SchemaLoader,
-              // queryRunner: QueryRunner,
+              schemaLoader: SchemaConnection,
   ) {
+    this.binName = 'gcli';
     this.global = global;
     this.schemaLoader = schemaLoader;
     this.projLoader = projLoader;
-    // this.queryRunner = queryRunner;
   }
 
   configureOuput(argv: any) {
     this.outputJson = argv.argv.json;
   }
 
-  setArguments(sywacInner: any, args: any[]) {
-    Printer.debug('Setting arguments', args.map((arg: any) => arg.name));
-    args.forEach((arg: any) => {
-      sywacInner.string(`--${arg.name}`, {
-        desc: arg.description || '',
-        group: 'Arguments:',
-      });
-      // flags: `--${arg.name}`,
-      // required: false,
-      // desc: arg.description || '',
-      // // type: 'number',
-      // hint: ''
-    });
-    // sywacInner.boolean('-u, --untracked', { desc: 'Include untracked changes' })
-  }
-
-  interpretField(sywac: any, selectionPath: string[], selectionArgs: any[], currentType: GraphQLObjectType, aField: GraphQLField<any, any>, accumulator: ResultAccumulator): void {
-    const fieldName = aField.name;
-    const type: GraphQLOutputType = aField.type;
-    const fieldType = aField.type as GraphQLNamedType;
-    const fieldTypeNonNull = aField.type as GraphQLNonNull<any>;
-    let fieldTypeNamed;
-    if (fieldTypeNonNull && fieldTypeNonNull.ofType && fieldTypeNonNull.ofType.name) {
-      fieldTypeNamed = fieldTypeNonNull.ofType;
-    }
-
-    let usage = `Usage: ${binName} ${selectionPath.join(' ')} <field> ...`;
-    const commandPart = '';
-    if (currentType.name && currentType.name.match(/.+Connection$/)) {
-      // commandPart = ' --first'
-      usage = `Usage: ${binName} ${selectionPath.join(' ')} --first 10`;
-    }
-    const params = undefined;
-    // if (aField.args && aField.args.length > 0) { //   fieldTypeNamed && fieldTypeNamed.name.match(/.+Connection$/)) { // fieldName === 'repositories') {
-    //   params = aField.args.map(arg => ({
-    //     flags: `--${arg.name}`,
-    //     required: false,
-    //     desc: arg.description || '',
-    //     // type: 'number',
-    //     hint: ''
-    //   }))
-    // }
-    const newSelectionPath = selectionPath.concat([fieldName]);
-
-    Printer.debug('Setting up command:', `${fieldName}${commandPart}`);
-
-    const holder: CommandRunnerHolder = {};
-    sywac
-      .usage(usage)
-      .command(`${fieldName}${commandPart}`, {
-        ignore: ['wat'],
-        group: 'Fields:',
-        params: params,
-        // paramsDescription: 'dadaddaada',
-        // params: [{
-        //   flags: '--what [what=10]',
-        //   desc: 'What would you like on your sandwich?'
-        // }],
-        hints: '',
-        // paramsGroup: 'Bla',
-        desc: aField.description,
-        setup: (sywacInner: any) => {
-          Printer.debug('Setting up subcommand', fieldName);
-
-          const shouldSetArguments = aField.args && aField.args.length > 0;
-          if (aField.args && aField.args.length > 0) {
-            this.setArguments(sywacInner, aField.args);
-          }
-          Printer.debug('fieldType', fieldType);
-          Printer.debug('fieldTypeNonNull.ofType', fieldTypeNonNull.ofType);
-
-          if (type instanceof GraphQLNonNull) {
-            Printer.debug('GraphQLNonNull', type);
-            if ((type.ofType as any).getFields) {
-              this.genSubcommands(sywacInner, newSelectionPath, selectionArgs, type.ofType as any, accumulator);
-            } else {
-              Printer.debug('no ofType', type);
-            }
-          } else if (type instanceof GraphQLScalarType) {
-            Printer.debug('GraphQLScalarType', type);
-          } else if (type instanceof GraphQLObjectType) {
-            Printer.debug('GraphQLObjectType', type);
-            this.genSubcommands(sywacInner, newSelectionPath, selectionArgs, type as any, accumulator);
-          } else if (type instanceof GraphQLList && (type.ofType as any).getFields) {
-            Printer.debug('GraphQLList', type);
-            this.genSubcommands(sywacInner, newSelectionPath, selectionArgs, type.ofType as any, accumulator);
-          } else {
-            Printer.debug('UNKNOWN', type);
-            sywacInner
-              .usage(`Use this command to access this field (${Printer.insp(fieldType)}): ${binName} ${newSelectionPath.join(' ')} `);
-          }
-          //
-          // if (fieldTypeNonNull.ofType && fieldTypeNonNull.ofType.getFields) {
-          //   this.genSubcommands(sywacInner, newSelectionPath, selectionArgs, fieldTypeNonNull.ofType )
-          // } else {
-          //   sywacInner
-          //     .usage(`Use this command to access this field (${Printer.inspect(fieldType)}): ${binName} ${newSelectionPath.join(' ')} ` )
-          // }
-
-        },
-        run: async (arg1: any, context: any) => {
-          const fixedSelectionPath = newSelectionPath.slice(1);
-          holder.runner = new CommandRunner(context, fieldType, fixedSelectionPath)
-
-          Printer.debug('Running command:', fixedSelectionPath);
-          // // Printer.debug(context);
-          //
-          // const args = this.resolveArgs(context, fixedSelectionPath);
-          //
-          // Printer.debug('Got args:', args);
-          // const result = await this.queryRunner.runQuery(this.outputJson, fixedSelectionPath, fieldType, args);
-          //
-          // acc.results.push(result)
-          // // resolve(result);
-        },
-      });
-
-    accumulator.results.push(holder);
-  }
-
-
-  genSubcommands(sywac: any, selectionPath: string[], selectionArgs: any[], type: GraphQLObjectType, accumulator: ResultAccumulator): void {
-    if (type) {
-      const fields = type.getFields();
-      for (const key in fields) {
-        Printer.debug('Working on field:', key)
-        const aField = fields[key] as GraphQLField<any, any>;
-        this.interpretField(sywac, selectionPath, selectionArgs, type, aField, accumulator);
-      }
-    }
-  }
-
-
   async interpretCommands(inputArgs: string[], argv: any): Promise<string> {
 
     this.configureOuput(argv);
 
     Printer.debug(argv);
-    const apiName = argv.argv._[0];  // default;
+    const apiName = argv.argv._[0];
 
     const slicedArgs = inputArgs.slice(1);
 
@@ -241,72 +43,33 @@ export default class Actions {
       const sywacother = require('sywac/api').get()
         .outputSettings({ maxWidth: 175 })
         .help('-h, --help')
-        .usage(`Usage: ${binName} <api-name> <field> ...`);
-
+        .usage(`Usage: ${this.binName} <api-name> <field> ...`);
       const parsed = await sywacother.parse(inputArgs);
       return parsed.output;
-      // throw new Error('Invalid api name: ' + apiName)
     }
 
     this.queryRunner = new QueryRunner(this.schemaLoader);
-    let schema;
-    try {
-      schema = await this.queryRunner.loadSchema(apiName);
-    } catch (e) {
-      throw new Error('Failed to load schema: ' + e)
-    }
+    const schema = await this.queryRunner.loadSchema(apiName);
 
-    Printer.debug('Loaded schema:\n', printSchema(schema))
     const sywacother = require('sywac/api').get()
       .outputSettings({ maxWidth: 175 })
       .help('-h, --help')
-      .usage(`Usage: ${binName} ${apiName} <field> ...`);
+      .usage(`Usage: ${this.binName} ${apiName} <field> ...`);
 
-    if (!schema.getQueryType()) {
-      throw new Error('No query type in the schema!')
-    }
-
-    const accumulator: ResultAccumulator = {
-        results: []
-    };
-
-    this.genSubcommands(sywacother, [apiName], [], schema.getQueryType() as any, accumulator);
-
+    const results = new FieldInterpreter(this).run(sywacother, apiName, schema);
     const parsed = await sywacother.parse(slicedArgs);
 
-    Printer.debug('RESULT:', parsed)
-
+    Printer.debug('RESULT:', parsed);
     if (parsed.output) {
       return parsed.output;
     } else {
-      const runners: CommandRunner[] = (accumulator.results
-        .filter(holder => holder.runner !== undefined)
-        .map(holder => holder.runner)) as any as CommandRunner[];
-
-      if (runners.length === 0) {
-        throw new Error('no runners - dont know what to do')
-      } else {
-        const result = await runners[0].run(this.queryRunner);
-        if (result.validationErrors) {
-          return result.validationErrors.map(err => {
-            if (err.stack) {
-              throw err;
-            } else {
-              return err.message;
-            }
-          }).join('\n')
-        } else {
-          return util.inspect(result.outputObj)
-        }
-      }
-
+      const result = await results.getQueryRunner().run(this.queryRunner);
+      return result.toOutput()
     }
-
   }
 
   public async runOn(args: string[] | undefined): Promise<string> {
     let sywac = require('sywac/api').get();
-
     for (const key in this.projLoader.getProjectNames()) {
       sywac = sywac
         .command(key, {
@@ -314,8 +77,6 @@ export default class Actions {
             Printer.debug("RUN:", arg1)
           }
         });
-
-        // .positional(key, { paramsDesc: 'A required string argument' });
     }
 
     const resolvedArgs = args || process.argv;
@@ -347,7 +108,6 @@ export default class Actions {
     Printer.debug('Changed args to:', newArgs);
     return this.interpretCommands(newArgs, argv);
   }
-
 }
 
 export interface ProgramOptions {
@@ -356,5 +116,3 @@ export interface ProgramOptions {
   debug?: boolean;
 }
 
-// export interface GenSchemaOptions {
-// }

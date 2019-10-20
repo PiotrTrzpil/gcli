@@ -4,7 +4,7 @@ import 'source-map-support/register';
 import * as program from 'commander';
 import yargs = require('yargs/yargs');
 import Actions, { ProgramOptions } from './Actions';
-import SchemaLoader from "./SchemaLoader";
+import SchemaConnection from "./SchemaConnection";
 import Printer from "./utils/Printer";
 import { ApiLoader } from './ApiLoader';
 import { Main } from './Main';

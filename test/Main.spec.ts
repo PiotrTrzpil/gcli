@@ -5,10 +5,10 @@ import * as chai from 'chai';
 import 'chai/register-should';
 import 'chai/register-expect';
 import Actions, { ProgramOptions } from '../src/Actions';
-import { TestSchemaLoader } from './framework/TestSchemaLoader';
+import { TestSchemaConnection } from './framework/TestSchemaConnection';
 import { TestProjectLoader } from './framework/TestProjectLoader';
 import { ApiLoader } from '../src/ApiLoader';
-import SchemaLoader from '../src/SchemaLoader';
+import SchemaConnection from '../src/SchemaConnection';
 
 const expect = chai.expect;
 
@@ -111,7 +111,7 @@ Fields:
 
    createRunner(options: ProgramOptions = {}) {
     const schemas = [this.helloApi, this.githubApi];
-    return new TestCliRunner(options, new TestProjectLoader(schemas), new TestSchemaLoader(schemas));
+    return new TestCliRunner(options, new TestProjectLoader(schemas), new TestSchemaConnection(schemas));
   }
 }
 
@@ -119,7 +119,7 @@ export class TestCliRunner {
 
   constructor(private options: ProgramOptions,
               private apiLoader: ApiLoader,
-              private schemaLoader: SchemaLoader) {
+              private schemaLoader: SchemaConnection) {
   }
 
   async execute(input: string): Promise<string> {

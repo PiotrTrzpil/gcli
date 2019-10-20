@@ -9,11 +9,6 @@ export class TestProjectLoader extends ApiLoader {
     super();
     this.schemas = schemas;
   }
-  //
-  //
-  // * getProjectNames(): IterableIterator<string> {
-  //   yield 'proj1';
-  // }
 
   getProjectNames(): IterableIterator<string> {
     return this.schemas[Symbol.iterator]();

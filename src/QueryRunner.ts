@@ -9,31 +9,64 @@ import {
   OperationDefinitionNode,
   SelectionSetNode,
   print,
-  validate,
+  validate, printSchema,
 } from 'graphql';
 import { Arg, SelectionSets } from './SelectionSets';
-import SchemaLoader from './SchemaLoader';
+import SchemaConnection from './SchemaConnection';
 import { ApolloQueryResult } from 'apollo-client';
 
-export interface QueryResult {
-  validationErrors?: ReadonlyArray<GraphQLError>
-  raw?: ApolloQueryResult<any>
-  outputObj: any
+export class QueryResult {
+  constructor(
+    private outputObj: any,
+    private validationErrors?: ReadonlyArray<GraphQLError>,
+    public raw?: ApolloQueryResult<any>,
+  ) {
+
+  }
+
+  public static fromErrors(errors: ReadonlyArray<GraphQLError>) {
+    return new QueryResult(
+      errors.map(err => err.message),
+      errors
+    );
+  }
+
+  toOutput() {
+    if (this.validationErrors) {
+      return this.validationErrors.map(err => {
+        if (err.stack) {
+          throw err;
+        } else {
+          return err.message;
+        }
+      }).join('\n')
+    } else {
+      return util.inspect(this.outputObj)
+    }
+  }
 }
 
 export class QueryRunner {
   private selectionSets: SelectionSets;
-  private schemaLoader: SchemaLoader;
+  private schemaConnection: SchemaConnection;
   private schema!: GraphQLSchema;
 
-  constructor(schemaLoader: SchemaLoader) {
+  constructor(schemaLoader: SchemaConnection) {
     this.selectionSets = new SelectionSets();
-    this.schemaLoader = schemaLoader;
+    this.schemaConnection = schemaLoader;
   }
 
   async loadSchema(name: string): Promise<GraphQLSchema> {
-    this.schema = await this.schemaLoader.load(name);
-    return this.schema;
+    try {
+      this.schema = await this.schemaConnection.load(name);
+      Printer.debug('Loaded schema:\n', printSchema(this.schema));
+      if (!this.schema.getQueryType()) {
+        throw new Error('No query type in the schema!')
+      }
+      return this.schema;
+    } catch (e) {
+      throw new Error(`Failed to load schema ${name}: ` + e)
+    }
   }
 
   getInnermostData(fieldPath: string[], data: any): any {
@@ -55,8 +88,22 @@ export class QueryRunner {
     }
   }
 
-  async runQuery(outputJson: boolean, fieldPath: string[], type: GraphQLNamedType, args: Record<string, Arg[]>): Promise<QueryResult> {
+  transformData(fieldPath: string[], data: any) {
+    let transformed = this.getInnermostData(fieldPath, data);
 
+    if (typeof transformed === 'object' && !util.isArray(transformed)) {
+      const validKeys = Object.keys(transformed)
+        .filter(key => !key.startsWith('['))
+        .filter(key => key !== '__typename');
+
+      const newObj: any = {};
+      validKeys.forEach(key => newObj[key] = transformed[key]);
+      transformed = newObj;
+    }
+    return transformed;
+  }
+
+  async runQuery(outputJson: boolean, fieldPath: string[], type: GraphQLNamedType, args: Record<string, Arg[]>): Promise<QueryResult> {
     const operation: OperationDefinitionNode = {
       kind: 'OperationDefinition',
       operation: 'query',
@@ -68,39 +115,21 @@ export class QueryRunner {
       definitions: [operation],
     };
     Printer.debug(print(doc as any));
-    // process.exit(1)
     const errors = validate(this.schema as GraphQLSchema, doc);
     if (errors.length > 0) {
       Printer.debug('Got validation errors', errors.slice(0, 4));
-      return {
-        validationErrors: errors,
-        outputObj: errors.map(err => err.message),
-      };
+      return QueryResult.fromErrors(errors);
     } else {
       try {
-        const result = await this.schemaLoader.doQuery(doc as any);
+        const result = await this.schemaConnection.doQuery(doc as any);
         if (result.data) {
-          let transformed = this.getInnermostData(fieldPath, result.data);
-
-          if (typeof transformed === 'object' && !util.isArray(transformed)) {
-            const validKeys = Object.keys(transformed)
-              .filter(key => !key.startsWith('['))
-              .filter(key => key !== '__typename');
-
-            const newObj: any = {};
-            validKeys.forEach(key => newObj[key] = transformed[key]);
-            transformed = newObj;
-          }
-          return {
-            outputObj: transformed,
-          };
+          return new QueryResult(
+            this.transformData(fieldPath, result.data)
+          );
         }
 
         if (result.errors) {
-          return {
-            validationErrors: result.errors,
-            outputObj: result.errors.map(err => err.message),
-          };
+          return QueryResult.fromErrors(errors);
         } else {
           throw new Error('no data nor errors')
         }
@@ -108,10 +137,10 @@ export class QueryRunner {
         if (e.graphQLErrors) {
           // Printer.debug(e);
           // console.error(e.message);
-          return {
-            validationErrors: [e],
-            outputObj: [e.message],
-          };
+          return new QueryResult(
+            [e.message],
+            [e]
+          );
         } else {
           throw e;
         }

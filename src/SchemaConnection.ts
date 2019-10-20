@@ -12,7 +12,7 @@ import Printer from './utils/Printer';
 import makeRemoteExecutableSchema from 'graphql-tools/dist/stitching/makeRemoteExecutableSchema';
 import * as fs from 'fs';
 
-export default class SchemaLoader {
+export default class SchemaConnection {
   private link?: ApolloLink;
   private global: ProgramOptions;
 
