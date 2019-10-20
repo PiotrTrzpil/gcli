@@ -20,13 +20,24 @@ export class TestSchemaLoader extends SchemaLoader {
       throw new Error(`Schema ${name} does not exist`)
     }
     const schemaString = fs.readFileSync(maybeSchemaFile.toString()).toString('utf-8');
-    const schema = makeExecutableSchema({ typeDefs: schemaString as any });
+    const schema = makeExecutableSchema({
+      typeDefs: schemaString as any,
+      resolverValidationOptions: {
+        requireResolversForResolveType: false
+      }
+    });
     this.schema = schema;
-    addMockFunctionsToSchema({ schema });
+    addMockFunctionsToSchema({
+      schema,
+      mocks: {
+        User: () => ({
+          name: 'some-github-user'
+        }),
+      }
+    });
 
     return Promise.resolve(schema);
   }
-
 
   async doQuery(query: DocumentNode): Promise<ExecutionResult> {
     return graphql(this.schema, print(query));

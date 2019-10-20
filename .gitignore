@@ -11,6 +11,7 @@ jspm_packages
 .idea
 
 
+.github.env
 .graphqlconfig.yaml
 /*.schema
 .idea/
