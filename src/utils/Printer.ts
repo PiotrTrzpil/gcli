@@ -1,3 +1,5 @@
+import 'reflect-metadata';
+import 'source-map-support/register';
 import * as util from 'util';
 
 export default class Printer {

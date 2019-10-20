@@ -1,3 +1,5 @@
+import 'reflect-metadata';
+import 'source-map-support/register';
 import { createHttpLink } from 'apollo-link-http';
 import { getGraphQLConfig, resolveEnvsInValues } from 'graphql-config';
 import { GraphQLEndpointsExtension } from 'graphql-config/lib/extensions';
@@ -6,7 +8,7 @@ import { DocumentNode, ExecutionResult, GraphQLSchema, printSchema } from 'graph
 import ApolloClient, { ApolloQueryResult } from 'apollo-client';
 import { ApolloLink, InMemoryCache } from 'apollo-boost';
 import { ProgramOptions } from './Actions';
-import Printer from './Printer';
+import Printer from './utils/Printer';
 import makeRemoteExecutableSchema from 'graphql-tools/dist/stitching/makeRemoteExecutableSchema';
 import * as fs from 'fs';
 

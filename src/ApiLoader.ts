@@ -1,6 +1,8 @@
+import 'reflect-metadata';
+import 'source-map-support/register';
 import { getGraphQLConfig, resolveEnvsInValues } from 'graphql-config';
 
-export class ProjectLoader {
+export class ApiLoader {
 
   * getProjectNames(): IterableIterator<string> {
     const config = getGraphQLConfig(process.cwd());

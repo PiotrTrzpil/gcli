@@ -1,5 +1,7 @@
+import 'reflect-metadata';
+import 'source-map-support/register';
 import * as util from 'util';
-import Printer from './Printer';
+import Printer from './utils/Printer';
 import {
   DocumentNode, GraphQLError,
   GraphQLNamedType,
@@ -77,7 +79,6 @@ export class QueryRunner {
     } else {
       try {
         const result = await this.schemaLoader.doQuery(doc as any);
-        Printer.debug('RAW RES:', result)
         if (result.data) {
           let transformed = this.getInnermostData(fieldPath, result.data);
 

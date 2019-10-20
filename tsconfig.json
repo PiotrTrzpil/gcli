@@ -9,13 +9,14 @@
     "experimentalDecorators": true,
     "preserveConstEnums": true,
     "emitDecoratorMetadata": true,
-    "target": "ES2017",
+    "target": "esnext",
     "lib": [
       "es2017",
       "dom",
       "es6",
       "es2015.promise",
-      "esnext.asynciterable"
+      "esnext.asynciterable",
+      "es2015.iterable"
     ],
     "typeRoots": [
       "./node_modules/@types"

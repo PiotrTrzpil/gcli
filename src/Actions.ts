@@ -1,8 +1,8 @@
+import 'reflect-metadata';
 import 'source-map-support/register';
-
 import { GraphQLNamedType, GraphQLScalarType, printSchema } from 'graphql';
 import { getGraphQLConfig, resolveEnvsInValues } from 'graphql-config';
-import Printer from './Printer';
+import Printer from './utils/Printer';
 import {
   GraphQLField,
   GraphQLList,
@@ -12,7 +12,7 @@ import {
 } from 'graphql/type/definition';
 import SchemaLoader from './SchemaLoader';
 import { QueryResult, QueryRunner } from './QueryRunner';
-import { ProjectLoader } from './ProjectLoader';
+import { ApiLoader } from './ApiLoader';
 import * as util from 'util';
 import * as _ from 'lodash';
 import { Arg } from './SelectionSets';
@@ -78,10 +78,10 @@ export default class Actions {
   private readonly schemaLoader: SchemaLoader;
   private outputJson = false;
   private queryRunner!: QueryRunner;
-  private projLoader: ProjectLoader;
+  private projLoader: ApiLoader;
 
   constructor(global: ProgramOptions,
-              projLoader: ProjectLoader,
+              projLoader: ApiLoader,
               schemaLoader: SchemaLoader,
               // queryRunner: QueryRunner,
   ) {
@@ -228,22 +228,35 @@ export default class Actions {
   }
 
 
-  async interpretCommands(slicedArgs: string[], argv: any): Promise<string> {
+  async interpretCommands(inputArgs: string[], argv: any): Promise<string> {
 
     this.configureOuput(argv);
 
     Printer.debug(argv);
     const apiName = argv.argv._[0];  // default;
 
-    slicedArgs = slicedArgs.slice(1);
+    const slicedArgs = inputArgs.slice(1);
 
     if (!_.isString(apiName)) {
-      throw new Error('Invalid api name: ' + apiName)
+      const sywacother = require('sywac/api').get()
+        .outputSettings({ maxWidth: 175 })
+        .help('-h, --help')
+        .usage(`Usage: ${binName} <api-name> <field> ...`);
+
+      const parsed = await sywacother.parse(inputArgs);
+      return parsed.output;
+      // throw new Error('Invalid api name: ' + apiName)
     }
 
     this.queryRunner = new QueryRunner(this.schemaLoader);
-    const schema = await this.queryRunner.loadSchema(apiName);
-    Printer.debug('loaded schema:\n', printSchema(schema))
+    let schema;
+    try {
+      schema = await this.queryRunner.loadSchema(apiName);
+    } catch (e) {
+      throw new Error('Failed to load schema: ' + e)
+    }
+
+    Printer.debug('Loaded schema:\n', printSchema(schema))
     const sywacother = require('sywac/api').get()
       .outputSettings({ maxWidth: 175 })
       .help('-h, --help')
@@ -289,15 +302,6 @@ export default class Actions {
 
     }
 
-
-  // } else {
-  //   Printer.debug(argv);
-  //   console.log('OUTPUT:')
-  //   console.log(argv.output)
-  //   return ''
-  //
-  // }
-
   }
 
   public async runOn(args: string[] | undefined): Promise<string> {
@@ -315,12 +319,14 @@ export default class Actions {
     }
 
     const resolvedArgs = args || process.argv;
+    Printer.debug('resolvedArgs:', resolvedArgs);
+
     const argv = await sywac
       .showHelpByDefault()
       .boolean('-d, --debug', { desc: 'Enable debug logging' })
       .boolean('--json', { desc: 'Enable json output' })
       .outputSettings({ maxWidth: 175 })
-      .parse(resolvedArgs.slice(2));
+      .parse(resolvedArgs.slice(1));
 
     if (argv.output !== '') {
       return argv.output;
@@ -329,12 +335,11 @@ export default class Actions {
     // console.log(util.inspect(argv, true, 999))
     // console.log(argv.output)
 
-    // console.dir(argv.details.types);
-
     if (argv.argv.debug) {
       process.env.DEBUG_ENABLED = 'true';
       process.env.DEBUG_COLORS = 'true';
     }
+    Printer.debug('Input args:', argv.details.args);
 
     const newArgs = argv.details.args.filter((arg: string) => arg !== '--debug' && arg !== '--json');
     // Printer.debug('newArgs:', newArgs);

@@ -1,3 +1,5 @@
+import 'reflect-metadata';
+import 'source-map-support/register';
 import {
   FieldNode,
   GraphQLNamedType,
@@ -7,7 +9,7 @@ import {
   SelectionNode,
   SelectionSetNode,
 } from 'graphql';
-import Printer from './Printer';
+import Printer from './utils/Printer';
 import * as _ from 'lodash';
 
 

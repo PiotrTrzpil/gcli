@@ -1,21 +1,21 @@
 #!/usr/bin/env node
-import 'source-map-support/register'
+import 'reflect-metadata';
+import 'source-map-support/register';
 import * as program from 'commander';
+import yargs = require('yargs/yargs');
 import Actions, { ProgramOptions } from './Actions';
 import SchemaLoader from "./SchemaLoader";
-import Printer from "./Printer";
-import { ProjectLoader } from './ProjectLoader';
+import Printer from "./utils/Printer";
+import { ApiLoader } from './ApiLoader';
+import { Main } from './Main';
 
 const options = (program as any) as ProgramOptions;
 
 async function run() {
   try {
-    const loader = new SchemaLoader({global: options});
-    const actions = new Actions(options, new ProjectLoader(), loader);
 
-    const output = await actions.runOn(process.argv);
+    await new Main().run(process.argv.slice(2));
 
-    console.log(output)
   } catch (error) {
     Printer.debug('Error on top level', error);
     console.error(error.message)
