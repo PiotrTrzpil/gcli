@@ -3,15 +3,15 @@ import 'source-map-support/register';
 import {
   FieldNode,
   GraphQLNamedType,
-  GraphQLObjectType,
-  isLeafType,
+  GraphQLObjectType, GraphQLOutputType,
+  isLeafType, isNonNullType,
   isObjectType,
   SelectionNode,
   SelectionSetNode,
 } from 'graphql';
 import Printer from './utils/Printer';
 import * as _ from 'lodash';
-
+import { Diagnostics } from './Diagnostics';
 
 export interface Arg {
   name: string,
@@ -21,10 +21,17 @@ export interface Arg {
 
 export class SelectionSets {
 
-  buildSelectionSet(fieldPath: string[], leafType: GraphQLNamedType, args: Record<string, Arg[]>): SelectionSetNode | undefined {
-    Printer.debug('fieldPath', fieldPath);
+  constructor(private diagnostics: Diagnostics) {
+  }
+
+  buildSelectionSet(fieldPath: string[], leafType: GraphQLOutputType, args: Record<string, Arg[]>): SelectionSetNode | undefined {
+    Printer.debug('buildSelectionSet: fieldPath', fieldPath);
     if (fieldPath.length === 0) {
-      if (isObjectType(leafType)) {
+      this.diagnostics.logType(leafType as GraphQLOutputType);
+
+      if (isNonNullType(leafType) && isObjectType(leafType.ofType)) {
+        return this.selectionSetForType(leafType.ofType);
+      } else if (isObjectType(leafType)) {
         return this.selectionSetForType(leafType);
       } else {
         return undefined;
@@ -35,6 +42,7 @@ export class SelectionSets {
   }
 
   private selectionWithSingleField(fieldName: string, args: Arg[], innerSelection?: SelectionSetNode): SelectionSetNode {
+    Printer.debug('selectionWithSingleField: fieldName', fieldName);
     const node: FieldNode = {
       kind: 'Field',
       name: {
@@ -61,12 +69,12 @@ export class SelectionSets {
   }
 
   private selectionSetForType(type: GraphQLNamedType): SelectionSetNode {
-
+    // Printer.debug('selectionSetForType: ', type);
     const selectionSet: SelectionNode[] = [];
     if (isObjectType(type)) {
       const outputType = type as GraphQLObjectType;
       // Printer.debug('outputType:', outputType);
-      // Printer.debug('outputType.getFields():', outputType.getFields().slice(0,4));
+      // Printer.debug('outputType.getFields():', outputType.getFields());
       const fields = outputType.getFields();
       for (const fieldName in outputType.getFields()) {
         const fieldType = fields[fieldName].type;
@@ -79,8 +87,6 @@ export class SelectionSets {
               value: fieldName,
             },
             arguments: [],
-            // directives?: DirectiveNode[];
-            // selectionSet?: SelectionSetNode;
           };
           selectionSet.push(node);
         }
@@ -92,7 +98,5 @@ export class SelectionSets {
     } else {
       throw new Error(type.name + ' is not an object type');
     }
-
   }
-
 }

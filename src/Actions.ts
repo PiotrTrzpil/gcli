@@ -6,6 +6,7 @@ import { QueryRunner } from './QueryRunner';
 import { ApiLoader } from './ApiLoader';
 import * as _ from 'lodash';
 import { FieldInterpreter } from './FieldInterpreter';
+import { Diagnostics } from './Diagnostics';
 
 
 export default class Actions {
@@ -15,15 +16,20 @@ export default class Actions {
   private queryRunner!: QueryRunner;
   private projLoader: ApiLoader;
   public binName: string;
+  private interpreter: FieldInterpreter;
 
-  constructor(global: ProgramOptions,
-              projLoader: ApiLoader,
-              schemaLoader: SchemaConnection,
+  constructor(
+    private diagnostics: Diagnostics,
+    global: ProgramOptions,
+    projLoader: ApiLoader,
+    schemaLoader: SchemaConnection,
   ) {
     this.binName = 'gcli';
     this.global = global;
     this.schemaLoader = schemaLoader;
     this.projLoader = projLoader;
+    this.interpreter = new FieldInterpreter(this, diagnostics);
+    this.queryRunner = new QueryRunner(this.diagnostics, this.schemaLoader);
   }
 
   configureOuput(argv: any) {
@@ -48,7 +54,6 @@ export default class Actions {
       return parsed.output;
     }
 
-    this.queryRunner = new QueryRunner(this.schemaLoader);
     const schema = await this.queryRunner.loadSchema(apiName);
 
     const sywacother = require('sywac/api').get()
@@ -56,10 +61,10 @@ export default class Actions {
       .help('-h, --help')
       .usage(`Usage: ${this.binName} ${apiName} <field> ...`);
 
-    const results = new FieldInterpreter(this).run(sywacother, apiName, schema);
+    const results = new FieldInterpreter(this, this.diagnostics).run(sywacother, apiName, schema);
     const parsed = await sywacother.parse(slicedArgs);
 
-    Printer.debug('RESULT:', parsed);
+    // Printer.debug('RESULT:', parsed);
     if (parsed.output) {
       return parsed.output;
     } else {

@@ -2,7 +2,6 @@
 import 'reflect-metadata';
 import 'source-map-support/register';
 import * as program from 'commander';
-import yargs = require('yargs/yargs');
 import Actions, { ProgramOptions } from './Actions';
 import SchemaConnection from "./SchemaConnection";
 import Printer from "./utils/Printer";

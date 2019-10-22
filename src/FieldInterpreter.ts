@@ -9,6 +9,7 @@ import {
 import { CommandRunner, CommandRunnerHolder, ResultAccumulator } from './CommandRunner';
 import Printer from './utils/Printer';
 import Actions from './Actions';
+import { Diagnostics } from './Diagnostics';
 
 export class InterpretationResult {
   constructor(private runnerHolders: CommandRunnerHolder[]) {
@@ -43,11 +44,11 @@ export class Dispatcher {
 }
 
 export class FieldInterpreter {
-  private actions: Actions;
 
-  constructor(actions: Actions) {
-    this.actions = actions;
-  }
+  constructor(
+    private actions: Actions,
+    private diagnostics: Diagnostics
+  ) {}
 
   public run(sywac: any, apiName: string, schema: any): InterpretationResult {
     const accumulator: ResultAccumulator = {
@@ -70,23 +71,14 @@ export class FieldInterpreter {
     }
   }
 
-  runOnField() {
-  }
-
   interpretField(sywac: any, selectionPath: string[], selectionArgs: any[], currentType: GraphQLObjectType, aField: GraphQLField<any, any>, accumulator: ResultAccumulator): void {
     const fieldName = aField.name;
     const type: GraphQLOutputType = aField.type;
     const fieldType = aField.type as GraphQLNamedType;
-    const fieldTypeNonNull = aField.type as GraphQLNonNull<any>;
-    let fieldTypeNamed;
-    if (fieldTypeNonNull && fieldTypeNonNull.ofType && fieldTypeNonNull.ofType.name) {
-      fieldTypeNamed = fieldTypeNonNull.ofType;
-    }
 
     let usage = `Usage: ${this.actions.binName} ${selectionPath.join(' ')} <field> ...`;
     const commandPart = '';
     if (currentType.name && currentType.name.match(/.+Connection$/)) {
-      // commandPart = ' --first'
       usage = `Usage: ${this.actions.binName} ${selectionPath.join(' ')} --first 10`;
     }
     const params = undefined;
@@ -104,7 +96,7 @@ export class FieldInterpreter {
     const holder: CommandRunnerHolder = {};
     sywac
       .usage(usage)
-      .command(`${fieldName}${commandPart}`, {
+      .command(`${fieldName}${commandPart}`,  {
         ignore: ['wat'],
         group: 'Fields:',
         params: params,
@@ -119,56 +111,33 @@ export class FieldInterpreter {
         setup: (sywacInner: any) => {
           Printer.debug('Setting up subcommand', fieldName);
 
-          const shouldSetArguments = aField.args && aField.args.length > 0;
+          // const shouldSetArguments = aField.args && aField.args.length > 0;
+
           if (aField.args && aField.args.length > 0) {
             this.setArguments(sywacInner, aField.args);
           }
-          Printer.debug('fieldType', fieldType);
-          Printer.debug('fieldTypeNonNull.ofType', fieldTypeNonNull.ofType);
+
+          this.diagnostics.logField(aField);
 
           if (type instanceof GraphQLNonNull) {
-            Printer.debug('GraphQLNonNull', type);
             if ((type.ofType as any).getFields) {
               this.genSubcommands(sywacInner, newSelectionPath, selectionArgs, type.ofType as any, accumulator);
-            } else {
-              Printer.debug('no ofType', type);
             }
           } else if (type instanceof GraphQLScalarType) {
-            Printer.debug('GraphQLScalarType', type);
           } else if (type instanceof GraphQLObjectType) {
-            Printer.debug('GraphQLObjectType', type);
             this.genSubcommands(sywacInner, newSelectionPath, selectionArgs, type as any, accumulator);
           } else if (type instanceof GraphQLList && (type.ofType as any).getFields) {
-            Printer.debug('GraphQLList', type);
             this.genSubcommands(sywacInner, newSelectionPath, selectionArgs, type.ofType as any, accumulator);
           } else {
-            Printer.debug('UNKNOWN', type);
             sywacInner
               .usage(`Use this command to access this field (${Printer.insp(fieldType)}): ${this.actions.binName} ${newSelectionPath.join(' ')} `);
           }
-          //
-          // if (fieldTypeNonNull.ofType && fieldTypeNonNull.ofType.getFields) {
-          //   this.genSubcommands(sywacInner, newSelectionPath, selectionArgs, fieldTypeNonNull.ofType )
-          // } else {
-          //   sywacInner
-          //     .usage(`Use this command to access this field (${Printer.inspect(fieldType)}): ${binName} ${newSelectionPath.join(' ')} ` )
-          // }
-
         },
         run: async (arg1: any, context: any) => {
           const fixedSelectionPath = newSelectionPath.slice(1);
           holder.runner = new CommandRunner(context, fieldType, fixedSelectionPath)
 
           Printer.debug('Running command:', fixedSelectionPath);
-          // // Printer.debug(context);
-          //
-          // const args = this.resolveArgs(context, fixedSelectionPath);
-          //
-          // Printer.debug('Got args:', args);
-          // const result = await this.queryRunner.runQuery(this.outputJson, fixedSelectionPath, fieldType, args);
-          //
-          // acc.results.push(result)
-          // // resolve(result);
         },
       });
 
@@ -182,13 +151,7 @@ export class FieldInterpreter {
         desc: arg.description || '',
         group: 'Arguments:',
       });
-      // flags: `--${arg.name}`,
-      // required: false,
-      // desc: arg.description || '',
-      // // type: 'number',
-      // hint: ''
     });
-    // sywacInner.boolean('-u, --untracked', { desc: 'Include untracked changes' })
   }
 
 }

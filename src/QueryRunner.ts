@@ -9,11 +9,12 @@ import {
   OperationDefinitionNode,
   SelectionSetNode,
   print,
-  validate, printSchema,
+  validate, printSchema, GraphQLOutputType,
 } from 'graphql';
 import { Arg, SelectionSets } from './SelectionSets';
 import SchemaConnection from './SchemaConnection';
 import { ApolloQueryResult } from 'apollo-client';
+import { Diagnostics } from './Diagnostics';
 
 export class QueryResult {
   constructor(
@@ -48,12 +49,13 @@ export class QueryResult {
 
 export class QueryRunner {
   private selectionSets: SelectionSets;
-  private schemaConnection: SchemaConnection;
   private schema!: GraphQLSchema;
 
-  constructor(schemaLoader: SchemaConnection) {
-    this.selectionSets = new SelectionSets();
-    this.schemaConnection = schemaLoader;
+  constructor(
+    private diagnostics: Diagnostics,
+    private schemaConnection: SchemaConnection) {
+
+    this.selectionSets = new SelectionSets(diagnostics);
   }
 
   async loadSchema(name: string): Promise<GraphQLSchema> {
@@ -103,18 +105,26 @@ export class QueryRunner {
     return transformed;
   }
 
-  async runQuery(outputJson: boolean, fieldPath: string[], type: GraphQLNamedType, args: Record<string, Arg[]>): Promise<QueryResult> {
+  async runQuery(outputJson: boolean, fieldPath: string[], type: GraphQLOutputType, args: Record<string, Arg[]>): Promise<QueryResult> {
+
+    const selectionSet = this.selectionSets.buildSelectionSet(fieldPath, type, args);
+    if (!selectionSet) {
+      Printer.debug('No selection set..');
+    }
+
     const operation: OperationDefinitionNode = {
       kind: 'OperationDefinition',
       operation: 'query',
-      selectionSet: this.selectionSets.buildSelectionSet(fieldPath, type, args) as SelectionSetNode,
+      selectionSet: selectionSet as SelectionSetNode,
     };
 
     const doc: DocumentNode = {
       kind: 'Document',
       definitions: [operation],
     };
-    Printer.debug(print(doc as any));
+
+    this.diagnostics.logQuery(doc);
+
     const errors = validate(this.schema as GraphQLSchema, doc);
     if (errors.length > 0) {
       Printer.debug('Got validation errors', errors.slice(0, 4));

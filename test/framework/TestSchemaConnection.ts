@@ -31,6 +31,7 @@ export class TestSchemaConnection extends SchemaConnection {
       schema,
       mocks: {
         User: () => ({
+          databaseId: 42,
           name: 'some-github-user'
         }),
       }

@@ -9,6 +9,7 @@ import { TestSchemaConnection } from './framework/TestSchemaConnection';
 import { TestProjectLoader } from './framework/TestProjectLoader';
 import { ApiLoader } from '../src/ApiLoader';
 import SchemaConnection from '../src/SchemaConnection';
+import { Main } from '../src/Main';
 
 const expect = chai.expect;
 
@@ -103,6 +104,26 @@ Fields:
     expect(output).to.eq(`'some-github-user'`)
   }
 
+  @test async 'github - access an int field'() {
+    const runner = this.createRunner();
+    const output = await runner.execute(`${this.githubApi} viewer databaseId`);
+    expect(output).to.eq(`42`)
+  }
+
+  @test async 'github - get multiple scalar values in an object field'() {
+    const runner = this.createRunner();
+    const output = await runner.execute(`${this.githubApi} viewer`);
+    expect(output).to.eq(`
+{ bio: 'Hello World',
+  company: 'Hello World',
+  databaseId: 42,
+  location: 'Hello World',
+  name: 'some-github-user',
+  websiteUrl: null }
+`.trim())
+
+  }
+
   logOutput(output: string) {
     console.log('\n\n----------------------------------------------------');
     console.log(output);
@@ -123,7 +144,9 @@ export class TestCliRunner {
   }
 
   async execute(input: string): Promise<string> {
-    const actions = new Actions(this.options, this.apiLoader, this.schemaLoader);
+
+    const main = Main.createFrom(this.options, this.apiLoader, this.schemaLoader);
+
     const spl = input.split(' ');
 
     let initial = [''];
@@ -131,7 +154,7 @@ export class TestCliRunner {
       initial = ['', '--debug']
     }
 
-    const output = await actions.runOn(initial.concat(spl));
+    const output = await main.run(initial.concat(spl));
     return output.trim()
   }
 }

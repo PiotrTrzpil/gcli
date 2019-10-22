@@ -1,17 +1,31 @@
 import 'reflect-metadata';
 import 'source-map-support/register';
 import SchemaConnection from './SchemaConnection';
-import Actions from './Actions';
+import Actions, { ProgramOptions } from './Actions';
 import { ApiLoader } from './ApiLoader';
+import { Diagnostics } from './Diagnostics';
 
 export class Main {
 
+  constructor(private actions: Actions) {
+  }
+
+  static createFrom(
+    options: ProgramOptions,
+    apiLoader: ApiLoader,
+    schemaLoader: SchemaConnection) {
+
+    return new Main(
+      new Actions(
+        new Diagnostics(),
+        options,
+        apiLoader,
+        schemaLoader
+      )
+    );
+  }
+
   async run(input: string[]) {
-
-    const loader = new SchemaConnection({global: {}});
-    const actions = new Actions({}, new ApiLoader(), loader);
-
-    const output = await actions.runOn(process.argv);
-
+    return this.actions.runOn(input)
   }
 }

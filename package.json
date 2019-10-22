@@ -40,7 +40,6 @@
     "apollo-link": "^1.2.13",
     "apollo-link-http": "^1.5.16",
     "chai": "^4.2.0",
-    "commander": "^2.20.0",
     "graphql": "^0.13.2",
     "graphql-config": "latest",
     "graphql-tag": "^2.10.1",
@@ -53,8 +52,7 @@
     "reflect-metadata": "^0.1.13",
     "source-map-support": "^0.5.13",
     "sywac": "^1.2.2",
-    "typescript-logging": "^0.5.0",
-    "yargs": "^14.0.0"
+    "typescript-logging": "^0.5.0"
   },
   "devDependencies": {
     "@graphql-codegen/cli": "^1.8.1",
@@ -65,7 +63,6 @@
     "@types/js-yaml": "^3.12.1",
     "@types/lodash": "^4.14.139",
     "@types/node": "^8.10.54",
-    "@types/yargs": "^13.0.2",
     "@typescript-eslint/eslint-plugin": "^1.12.0",
     "@typescript-eslint/parser": "^1.12.0",
     "coveralls": "^2.0.0",
