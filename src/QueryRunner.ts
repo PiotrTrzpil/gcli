@@ -139,7 +139,7 @@ export class QueryRunner {
         }
 
         if (result.errors) {
-          return QueryResult.fromErrors(errors);
+          return QueryResult.fromErrors(result.errors);
         } else {
           throw new Error('no data nor errors')
         }

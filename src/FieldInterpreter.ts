@@ -135,7 +135,7 @@ export class FieldInterpreter {
         },
         run: async (arg1: any, context: any) => {
           const fixedSelectionPath = newSelectionPath.slice(1);
-          holder.runner = new CommandRunner(context, fieldType, fixedSelectionPath)
+          holder.runner = new CommandRunner(context, type, fixedSelectionPath)
 
           Printer.debug('Running command:', fixedSelectionPath);
         },

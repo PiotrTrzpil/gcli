@@ -11,6 +11,7 @@ import { ProgramOptions } from './Actions';
 import Printer from './utils/Printer';
 import makeRemoteExecutableSchema from 'graphql-tools/dist/stitching/makeRemoteExecutableSchema';
 import * as fs from 'fs';
+import * as path from 'path';
 
 export default class SchemaConnection {
   private link?: ApolloLink;
@@ -19,6 +20,35 @@ export default class SchemaConnection {
   constructor(props: { link?: ApolloLink, global: ProgramOptions }) {
     this.link = props.link;
     this.global = props.global;
+  }
+
+  /**
+   * Sanitize project name to prevent path traversal attacks.
+   * Only allows alphanumeric characters, hyphens, and underscores.
+   */
+  private sanitizeProjectName(name: string): string {
+    if (!/^[a-zA-Z0-9_-]+$/.test(name)) {
+      throw new Error(`Invalid project name: "${name}". Only alphanumeric characters, hyphens, and underscores are allowed.`);
+    }
+    return name;
+  }
+
+  /**
+   * Get the safe schema cache file path for a project.
+   */
+  private getSchemaCachePath(name: string): string {
+    const sanitizedName = this.sanitizeProjectName(name);
+    const cacheDir = process.cwd();
+    const schemaPath = path.join(cacheDir, `${sanitizedName}.schema`);
+
+    // Ensure the resolved path is within the current working directory
+    const resolvedPath = path.resolve(schemaPath);
+    const resolvedCacheDir = path.resolve(cacheDir);
+    if (!resolvedPath.startsWith(resolvedCacheDir + path.sep)) {
+      throw new Error('Invalid schema path: path traversal detected');
+    }
+
+    return schemaPath;
   }
 
   public async load(name: string): Promise<GraphQLSchema> {
@@ -36,12 +66,13 @@ export default class SchemaConnection {
 
     this.link = createHttpLink({ uri: endpoint.url, headers: endpoint.headers });
 
+    const schemaPath = this.getSchemaCachePath(name);
     let predefinedSchema;
-    if (fs.existsSync(name + '.schema')) {
-      predefinedSchema = fs.readFileSync(name + '.schema').toString('utf-8');
+    if (fs.existsSync(schemaPath)) {
+      predefinedSchema = fs.readFileSync(schemaPath).toString('utf-8');
     } else {
       predefinedSchema = await introspectSchema(this.link as any);
-      fs.writeFileSync(name + '.schema', printSchema(predefinedSchema));
+      fs.writeFileSync(schemaPath, printSchema(predefinedSchema));
     }
 
     return makeRemoteExecutableSchema({
