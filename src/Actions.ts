@@ -75,7 +75,7 @@ export default class Actions {
 
   public async runOn(args: string[] | undefined): Promise<string> {
     let sywac = require('sywac/api').get();
-    for (const key in this.projLoader.getProjectNames()) {
+    for (const key of this.projLoader.getProjectNames()) {
       sywac = sywac
         .command(key, {
           run: async (arg1: any, context: any) => {

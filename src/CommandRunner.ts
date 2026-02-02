@@ -1,4 +1,4 @@
-import { GraphQLNamedType } from 'graphql';
+import { GraphQLOutputType } from 'graphql';
 import { QueryResult, QueryRunner } from './QueryRunner';
 import Printer from './utils/Printer';
 import { Arg } from './SelectionSets';
@@ -13,7 +13,7 @@ export class CommandRunnerHolder {
 
 export class CommandRunner {
   constructor(private context: any,
-              private fieldType: GraphQLNamedType,
+              private fieldType: GraphQLOutputType,
               private selectionPath: string[]) {
   }
 

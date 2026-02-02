@@ -49,17 +49,21 @@ export class SelectionSets {
         kind: 'Name',
         value: fieldName,
       },
-      arguments: args.map((arg: Arg) => ({
-        kind: 'Argument',
-        name: {
-          kind: 'Name',
-          value: arg.name,
-        },
-        value: {
-          kind: _.parseInt(arg.value) ?  'IntValue' : 'StringValue' ,
-          value: _.parseInt(arg.value) ?  _.parseInt(arg.value): arg.value,
-        },
-      })),
+      arguments: args.map((arg: Arg) => {
+        const parsedInt = _.parseInt(arg.value);
+        const isInteger = !_.isNaN(parsedInt) && String(parsedInt) === arg.value;
+        return {
+          kind: 'Argument',
+          name: {
+            kind: 'Name',
+            value: arg.name,
+          },
+          value: {
+            kind: isInteger ? 'IntValue' : 'StringValue',
+            value: isInteger ? parsedInt : arg.value,
+          },
+        };
+      }),
       selectionSet: innerSelection,
     } as any;
     return {
